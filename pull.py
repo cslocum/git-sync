@@ -47,26 +47,31 @@ class GitSync(object):
         self.branch_name = branch_name
         self.repo_dir = repo_dir
 
+        logging.basicConfig(
+            format='[%(asctime)s] %(levelname)s -- %(message)s',
+            level=logging.DEBUG
+        )
+
         self.sync()
 
     def find_upstream_updates(self, kind):
         logging.info('Get list of files that have been updated/added upstream...')
-	cmd = [
+        cmd = [
             'git', 'log', '..origin/{}'.format(self.branch_name),
             '--oneline', '--name-status'
         ]
-        logging.debug('Running: {}'.format(cmd.join(' '))
+        logging.debug('Running: {}'.format(cmd.join(' ')))
         output = subprocess.check_output(cmd, cwd=self.repo_dir).decode()
         files = []
         for line in output.split('\n'):
             if line.startswith(kind):
                 files.append(os.path.join(self.repo_dir, line.split('\t', 1)[1]))
-	logging.info('Modified files: {}'.format(files.join(' ')))
+        logging.info('Modified files: {}'.format(files.join(' ')))
 
         return files
 
     def merge(self):
-	# !!! should this be a pull instead of a merge???
+        # !!! should this be a pull instead of a merge???
         yield from execute_cmd([
             'git',
             '-c', 'user.email=archive@stsci.edu',
@@ -93,19 +98,19 @@ class GitSync(object):
         deleted_files = subprocess.check_output([
             'git', 'ls-files', '--deleted', '-z'
         ], cwd=self.repo_dir).decode().strip().split('\0')
-	for filename in deleted_files:
+        for filename in deleted_files:
             if filename:
                 cmd = ['git', 'checkout', 'origin/{}'.format(self.branch_name), '--', filename]
-                logging.debug('Running: {}'.format(cmd.join(' '))
+                logging.debug('Running: {}'.format(cmd.join(' ')))
                 yield from execute_cmd(cmd, cwd=self.repo_dir)
 
-        # find locally modified files and commit them
+        # find new or modified files and commit them
         local_changes = False
         try:
             subprocess.check_call(['git', 'diff-files', '--quiet'], cwd=self.repo_dir)
         except subprocess.CalledProcessError:
             local_changes = True
-	if local_changes:
+        if local_changes:
             yield from execute_cmd([
                 'git',
                 '-c', 'user.email=archive@stsci.edu',
@@ -116,7 +121,7 @@ class GitSync(object):
             ], cwd=self.repo_dir)
 
     def update_remotes(self):
-        logging.info('Fetching removes from {}...'.format(self.repo_dir))
+        logging.info('Fetching remotes from {}...'.format(self.repo_dir))
         yield from execute_cmd(['git', 'fetch'], cwd=self.repo_dir)
         logging.info('Done fetching remotes')	
 
@@ -128,6 +133,7 @@ class GitSync(object):
         logging.info('Repo {} initialized'.format(self.repo_dir))
 
     def sync(self):
+        logging.info('Syncing...')
         if not os.path.exists(self.repo_dir):
             self.init_repo()
         else:
@@ -137,11 +143,6 @@ class GitSync(object):
 
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        format='[%(asctime)s] %(levelname)s -- %(message)s',
-        level=logging.DEBUG
-    )
-
     parser = argparse.ArgumentParser(
         description='Synchronizes a github repository with a local repository.'
     )
@@ -150,4 +151,4 @@ if __name__ == '__main__':
     parser.add_argument('repo_dir', default='.', help='Path to clone repo under', nargs='?')
     args = parser.parse_args()
 
-    GitSync(git_url, branch_name, repo_dir).sync()
+    GitSync(args.git_url, args.branch_name, args.repo_dir)
