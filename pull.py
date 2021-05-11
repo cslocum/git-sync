@@ -9,7 +9,6 @@ import time
 import argparse
 import datetime
 
-
 def execute_cmd(cmd, **kwargs):
     yield '$ {}\n'.format(' '.join(cmd))
     kwargs['stdout'] = subprocess.PIPE
@@ -60,13 +59,13 @@ class GitSync(object):
             'git', 'log', '..origin/{}'.format(self.branch_name),
             '--oneline', '--name-status'
         ]
-        logging.debug('Running: {}'.format(cmd.join(' ')))
+        logging.debug('Running: {}'.format(' '.join(cmd)))
         output = subprocess.check_output(cmd, cwd=self.repo_dir).decode()
         files = []
         for line in output.split('\n'):
             if line.startswith(kind):
                 files.append(os.path.join(self.repo_dir, line.split('\t', 1)[1]))
-        logging.info('Modified files: {}'.format(files.join(' ')))
+        logging.info('Modified files: {}'.format(' '.join(files)))
 
         return files
 
@@ -101,7 +100,7 @@ class GitSync(object):
         for filename in deleted_files:
             if filename:
                 cmd = ['git', 'checkout', 'origin/{}'.format(self.branch_name), '--', filename]
-                logging.debug('Running: {}'.format(cmd.join(' ')))
+                logging.debug('Running: {}'.format(' '.join(cmd)))
                 yield from execute_cmd(cmd, cwd=self.repo_dir)
 
         # find new or modified files and commit them
@@ -128,12 +127,13 @@ class GitSync(object):
     def init_repo(self):
         logging.info('Repo {} doesn\'t exist. Cloning...'.format(self.repo_dir))
         yield from execute_cmd(
-            ['git', 'clone', '--branch', self.branch_name, 'self.git_url, self.repo_dir']
+            ['git', 'clone', '--branch', self.branch_name, self.git_url, self.repo_dir]
         )
         logging.info('Repo {} initialized'.format(self.repo_dir))
 
     def sync(self):
         logging.info('Syncing...')
+#        import pdb; pdb.set_trace()
         if not os.path.exists(self.repo_dir):
             self.init_repo()
         else:
