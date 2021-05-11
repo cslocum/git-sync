@@ -1,30 +1,23 @@
 #!/usr/bin/env python
 
+# Inspired by https://github.com/jupyterhub/nbgitpuller/
+
 import os
 import subprocess
 import logging
 import time
 import argparse
 import datetime
-#from traitlets import Integer, default
-#from traitlets.config import Configurable
-#from functools import partial
 
 
 def execute_cmd(cmd, **kwargs):
-    """
-    Call given command, yielding output line by line
-    """
     yield '$ {}\n'.format(' '.join(cmd))
     kwargs['stdout'] = subprocess.PIPE
     kwargs['stderr'] = subprocess.STDOUT
 
     proc = subprocess.Popen(cmd, **kwargs)
 
-    # Capture output for logging.
-    # Each line will be yielded as text.
-    # This should behave the same as .readline(), but splits on `\r` OR `\n`,
-    # not just `\n`.
+    # capture output for logging; each line will be yielded as text
     buf = []
 
     def flush():
@@ -72,6 +65,16 @@ class GitSync(object):
 
         return files
 
+    def merge(self):
+	# !!! should this be a pull instead of a merge???
+        yield from execute_cmd([
+            'git',
+            '-c', 'user.email=archive@stsci.edu',
+            '-c', 'user.name=git-sync',
+            'merge',
+            '-Xours', 'origin/{}'.format(self.branch_name)
+        ], cwd=self.repo_dir)
+
     def prepare_clone(self):
 	# rename any user-created files that have the same names as newly
         # created upstream files
@@ -112,15 +115,6 @@ class GitSync(object):
                 '--allow-empty'
             ], cwd=self.repo_dir)
 
-    def merge(self):
-        yield from execute_cmd([
-            'git',
-            '-c', 'user.email=archive@stsci.edu',
-            '-c', 'user.name=git-sync',
-            'merge',
-            '-Xours', 'origin/{}'.format(self.branch_name)
-        ], cwd=self.repo_dir)
-
     def update_remotes(self):
         logging.info('Fetching removes from {}...'.format(self.repo_dir))
         yield from execute_cmd(['git', 'fetch'], cwd=self.repo_dir)
@@ -134,28 +128,12 @@ class GitSync(object):
         logging.info('Repo {} initialized'.format(self.repo_dir))
 
     def sync(self):
-	"""
-        Pull selected repo from a remote git repository,
-        while preserving user changes
-        """
         if not os.path.exists(self.repo_dir):
-            yield from self.init_repo()
+            self.init_repo()
         else:
             self.update_remotes()
             self.prepare_clone()
             self.merge()
-
-
-   # clone repo if doesn't exist
-   # else
-       # update_remotes
-       # rename_local_untracked
-       # reset_deleted_files
-       # if repo_is_dirty
-           # git commit with special user (auto commit)
-    # git merge ... -Xours (favor upstream)
-
-
 
 
 if __name__ == '__main__':
@@ -172,4 +150,4 @@ if __name__ == '__main__':
     parser.add_argument('repo_dir', default='.', help='Path to clone repo under', nargs='?')
     args = parser.parse_args()
 
-    GitSync(git_url, branch_name, repo_dir).sync(args)
+    GitSync(git_url, branch_name, repo_dir).sync()
