@@ -56,22 +56,8 @@ class GitSync(object):
 
         self.sync()
 
-    def init_repo(self):
-        logging.info('Repo {} doesn\'t exist. Cloning...'.format(self.repo_dir))
-        yield from execute_cmd(
-	    ['git', 'clone', '--branch', self.branch_name, 'self.git_url, self.repo_dir']
-	)
-        logging.info('Repo {} initialized'.format(self.repo_dir))
-
-    def update(self):
-        logging.info('Fetching removes from {}...'.format(self.repo_dir))
-        yield from execute_cmd(['git', 'fetch'], cwd=self.repo_dir)
-	logging.info('Done fetching remotes')
-
-    def find_upstream_changed(self, kind):
-        """
-        Return list of files that have been changed upstream belonging to a particular kind of change
-        """
+    def find_upstream_updates(self, kind):
+        logging.info('Get list of files that have been updated/added upstream...')
 	cmd = [
             'git', 'log', '..origin/{}'.format(self.branch_name),
             '--oneline', '--name-status'
@@ -82,15 +68,70 @@ class GitSync(object):
         for line in output.split('\n'):
             if line.startswith(kind):
                 files.append(os.path.join(self.repo_dir, line.split('\t', 1)[1]))
-
 	logging.info('Modified files: {}'.format(files.join(' ')))
+
         return files
 
     def prepare_clone(self):
+	# rename any user-created files that have the same names as newly
+        # created upstream files
+        new_upstream_files = self.find_upstream_updates('A')
+        for f in new_upstream_files:
+            if os.path.exists(f):
+                # if there's a file extension, put the timestamp before it
+                ts = datetime.datetime.now().strftime('__%Y%m%d%H%M%S')
+                path_head, path_tail = os.path.split(f)
+                path_tail = ts.join(os.path.splitext(path_tail))
+                new_file_name = os.path.join(path_head, path_tail)
+                os.rename(f, new_file_name)
+                logging.info('Renamed {} to {} to avoid conflict with upstream'.format(f, new_file_name))
 
-        new_upstream_files = self.find_upstream_changed('A')
-        
-	
+        # reset locally deleted files
+        deleted_files = subprocess.check_output([
+            'git', 'ls-files', '--deleted', '-z'
+        ], cwd=self.repo_dir).decode().strip().split('\0')
+	for filename in deleted_files:
+            if filename:
+                cmd = ['git', 'checkout', 'origin/{}'.format(self.branch_name), '--', filename]
+                logging.debug('Running: {}'.format(cmd.join(' '))
+                yield from execute_cmd(cmd, cwd=self.repo_dir)
+
+        # find locally modified files and commit them
+        local_changes = False
+        try:
+            subprocess.check_call(['git', 'diff-files', '--quiet'], cwd=self.repo_dir)
+        except subprocess.CalledProcessError:
+            local_changes = True
+	if local_changes:
+            yield from execute_cmd([
+                'git',
+                '-c', 'user.email=archive@stsci.edu',
+                '-c', 'user.name=git-sync',
+                'commit',
+                '-am', 'Automatic commit by git-sync',
+                '--allow-empty'
+            ], cwd=self.repo_dir)
+
+    def merge(self):
+        yield from execute_cmd([
+            'git',
+            '-c', 'user.email=archive@stsci.edu',
+            '-c', 'user.name=git-sync',
+            'merge',
+            '-Xours', 'origin/{}'.format(self.branch_name)
+        ], cwd=self.repo_dir)
+
+    def update_remotes(self):
+        logging.info('Fetching removes from {}...'.format(self.repo_dir))
+        yield from execute_cmd(['git', 'fetch'], cwd=self.repo_dir)
+        logging.info('Done fetching remotes')	
+
+    def init_repo(self):
+        logging.info('Repo {} doesn\'t exist. Cloning...'.format(self.repo_dir))
+        yield from execute_cmd(
+            ['git', 'clone', '--branch', self.branch_name, 'self.git_url, self.repo_dir']
+        )
+        logging.info('Repo {} initialized'.format(self.repo_dir))
 
     def sync(self):
 	"""
@@ -100,7 +141,9 @@ class GitSync(object):
         if not os.path.exists(self.repo_dir):
             yield from self.init_repo()
         else:
-            self.update()
+            self.update_remotes()
+            self.prepare_clone()
+            self.merge()
 
 
    # clone repo if doesn't exist
@@ -116,7 +159,6 @@ class GitSync(object):
 
 
 if __name__ == '__main__':
-
     logging.basicConfig(
         format='[%(asctime)s] %(levelname)s -- %(message)s',
         level=logging.DEBUG
