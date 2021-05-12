@@ -49,14 +49,13 @@ class GitSync(object):
 
     def find_upstream_updates(self, kind):
         logging.info('Get list of files that have been updated/added upstream...')
-        cmd = [
+        output = subprocess.check_output([
             'git', 'log', '..origin/{}'.format(self.branch_name),
             '--oneline', '--name-status'
-        ]
-        output = subprocess.check_output(cmd, cwd=self.repo_dir).decode()
+        ], cwd=self.repo_dir).decode()
         files = []
         for line in output.split('\n'):
-            if line.startswith(kind):
+            if line.startswith('A'):
                 files.append(line.split('\t', 1)[1])
         
         return files
