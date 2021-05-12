@@ -117,6 +117,7 @@ class GitSync(object):
             self.update_remotes()
             self.prepare_clone()
             self.merge()
+        logging.info('Done.')
 
 
 if __name__ == '__main__':
