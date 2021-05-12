@@ -48,7 +48,7 @@ class GitSync(object):
                 logging.info('Moved {} to {} to avoid conflict with upstream'.format(f, new_file_name))
 
     def find_upstream_updates(self):
-        logging.info('Get list of files that have been updated/added upstream...')
+        logging.info('Get list of files that have been added upstream...')
         output = subprocess.check_output([
             'git', 'log', '..origin/{}'.format(self.branch_name),
             '--oneline', '--name-status'
