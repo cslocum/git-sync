@@ -1,42 +1,27 @@
 #!/usr/bin/env python
 
-# Inspired by https://github.com/jupyterhub/nbgitpuller/
+# Inspired by https://github.com/jupyterhub/nbgitpuller
 
 import os
+import sys
 import subprocess
 import logging
 import time
 import argparse
 import datetime
 
+
 def execute_cmd(cmd, **kwargs):
-    yield '$ {}\n'.format(' '.join(cmd))
-    kwargs['stdout'] = subprocess.PIPE
-    kwargs['stderr'] = subprocess.STDOUT
-
-    proc = subprocess.Popen(cmd, **kwargs)
-
-    # capture output for logging; each line will be yielded as text
-    buf = []
-
-    def flush():
-        line = b''.join(buf).decode('utf8', 'replace')
-        buf[:] = []
-        return line
-
-    c_last = ''
     try:
-        for c in iter(partial(proc.stdout.read, 1), b''):
-            if c_last == b'\r' and buf and c != b'\n':
-                yield flush()
-            buf.append(c)
-            if c == b'\n':
-                yield flush()
-            c_last = c
-    finally:
-        ret = proc.wait()
-        if ret != 0:
-            raise subprocess.CalledProcessError(ret, cmd)
+        cwd = kwargs.get("cwd")
+        here = os.getcwd()
+        if cwd:
+            os.chdir(cwd)
+        os.system(" ".join(cmd))
+        os.chdir(here)
+    except Exception as e:
+        print(e)
+        raise e
 
 
 class GitSync(object):
@@ -53,37 +38,8 @@ class GitSync(object):
 
         self.sync()
 
-    def find_upstream_updates(self, kind):
-        logging.info('Get list of files that have been updated/added upstream...')
-        cmd = [
-            'git', 'log', '..origin/{}'.format(self.branch_name),
-            '--oneline', '--name-status'
-        ]
-        logging.debug('Running: {}'.format(' '.join(cmd)))
-        output = subprocess.check_output(cmd, cwd=self.repo_dir).decode()
-        files = []
-        for line in output.split('\n'):
-            if line.startswith(kind):
-                files.append(os.path.join(self.repo_dir, line.split('\t', 1)[1]))
-        logging.info('Modified files: {}'.format(' '.join(files)))
-
-        return files
-
-    def merge(self):
-        # !!! should this be a pull instead of a merge???
-        yield from execute_cmd([
-            'git',
-            '-c', 'user.email=archive@stsci.edu',
-            '-c', 'user.name=git-sync',
-            'merge',
-            '-Xours', 'origin/{}'.format(self.branch_name)
-        ], cwd=self.repo_dir)
-
-    def prepare_clone(self):
-	# rename any user-created files that have the same names as newly
-        # created upstream files
-        new_upstream_files = self.find_upstream_updates('A')
-        for f in new_upstream_files:
+    def rename_files(self, files):
+        for f in files:
             if os.path.exists(f):
                 # if there's a file extension, put the timestamp before it
                 ts = datetime.datetime.now().strftime('__%Y%m%d%H%M%S')
@@ -93,7 +49,46 @@ class GitSync(object):
                 os.rename(f, new_file_name)
                 logging.info('Renamed {} to {} to avoid conflict with upstream'.format(f, new_file_name))
 
-        # reset locally deleted files
+    def find_upstream_updates(self, kind):
+        logging.info('Get list of files that have been updated/added upstream...')
+        cmd = [
+            'git', 'log', '..origin/{}'.format(self.branch_name),
+            '--oneline', '--name-status'
+        ]
+        output = subprocess.check_output(cmd, cwd=self.repo_dir).decode()
+        files = []
+        for line in output.split('\n'):
+            if line.startswith(kind):
+                #files.append(os.path.join(self.repo_dir, line.split('\t', 1)[1]))
+                files.append(line.split('\t', 1)[1])
+        
+        return files
+
+    def merge(self):
+        logging.info('Merging {} into local clone...'.format(self.branch_name))
+        cmd = [
+            'git',
+            '-c', 'user.email=archive@stsci.edu',
+            '-c', 'user.name=git-sync',
+            'merge',
+            '-Xours',
+            '--no-edit',
+            'origin/{}'.format(self.branch_name)
+        ]
+        logging.debug('Running: {}'.format(' '.join(cmd)))
+        execute_cmd(cmd, cwd=self.repo_dir)
+
+    def prepare_clone(self):
+    	# rename any user-created files that have the same names as newly
+        # created upstream files
+        logging.info('Backing up any conflicting user-created files...')
+        new_upstream_files = self.find_upstream_updates('A')
+        logging.debug('NEW UPSTREAM FILES' + str(new_upstream_files))
+        self.rename_files(new_upstream_files)
+
+
+
+        logging.info('Retrieving locally deleted files...')
         deleted_files = subprocess.check_output([
             'git', 'ls-files', '--deleted', '-z'
         ], cwd=self.repo_dir).decode().strip().split('\0')
@@ -101,39 +96,44 @@ class GitSync(object):
             if filename:
                 cmd = ['git', 'checkout', 'origin/{}'.format(self.branch_name), '--', filename]
                 logging.debug('Running: {}'.format(' '.join(cmd)))
-                yield from execute_cmd(cmd, cwd=self.repo_dir)
+                execute_cmd(cmd, cwd=self.repo_dir)
 
-        # find new or modified files and commit them
+
+
+        logging.info('Renaming modified local files...')
         local_changes = False
         try:
             subprocess.check_call(['git', 'diff-files', '--quiet'], cwd=self.repo_dir)
         except subprocess.CalledProcessError:
             local_changes = True
         if local_changes:
-            yield from execute_cmd([
-                'git',
-                '-c', 'user.email=archive@stsci.edu',
-                '-c', 'user.name=git-sync',
-                'commit',
-                '-am', 'Automatic commit by git-sync',
-                '--allow-empty'
-            ], cwd=self.repo_dir)
+            logging.debug('LOCAL CHANGES DETECTED')
+            proc = subprocess.Popen(
+                ['git diff-files --relative'],
+                stdout=subprocess.PIPE, shell=True
+            )
+            (output, err) = proc.communicate()
+            output_lines = output.decode("utf-8").split('\n')
+            changed_files = [f.strip('\n').split()[-1] for f in output_lines if len(f) > 0]
+            logging.debug('CHANGED LOCAL FILES: ' + str(changed_files))
+            self.rename_files(changed_files)
+
+
+
 
     def update_remotes(self):
         logging.info('Fetching remotes from {}...'.format(self.repo_dir))
-        yield from execute_cmd(['git', 'fetch'], cwd=self.repo_dir)
+        execute_cmd(['git', 'fetch'], cwd=self.repo_dir)
         logging.info('Done fetching remotes')	
 
     def init_repo(self):
         logging.info('Repo {} doesn\'t exist. Cloning...'.format(self.repo_dir))
-        yield from execute_cmd(
+        execute_cmd(
             ['git', 'clone', '--branch', self.branch_name, self.git_url, self.repo_dir]
         )
         logging.info('Repo {} initialized'.format(self.repo_dir))
 
     def sync(self):
-        logging.info('Syncing...')
-#        import pdb; pdb.set_trace()
         if not os.path.exists(self.repo_dir):
             self.init_repo()
         else:
