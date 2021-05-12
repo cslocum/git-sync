@@ -108,9 +108,7 @@ class GitSync(object):
 
     def init_repo(self):
         logging.info('Repo {} doesn\'t exist. Cloning...'.format(self.repo_dir))
-        execute_cmd(
-            ['git', 'clone', '--branch', self.branch_name, self.git_url, self.repo_dir]
-        )
+        execute_cmd(['git', 'clone', '--branch', self.branch_name, self.git_url, self.repo_dir])
         logging.info('Repo {} initialized'.format(self.repo_dir))
 
     def sync(self):
