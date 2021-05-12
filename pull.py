@@ -47,7 +47,7 @@ class GitSync(object):
                 shutil.move(f, new_file_name)
                 logging.info('Moved {} to {} to avoid conflict with upstream'.format(f, new_file_name))
 
-    def find_upstream_updates(self, kind):
+    def find_upstream_updates(self):
         logging.info('Get list of files that have been updated/added upstream...')
         output = subprocess.check_output([
             'git', 'log', '..origin/{}'.format(self.branch_name),
@@ -76,7 +76,7 @@ class GitSync(object):
     	# rename any user-created files that have the same names as newly
         # created upstream files
         logging.info('Backing up any conflicting user-created files...')
-        new_upstream_files = self.find_upstream_updates('A')
+        new_upstream_files = self.find_upstream_updates()
         self.move_files(new_upstream_files)
 
         logging.info('Renaming modified local files...')
