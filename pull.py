@@ -103,12 +103,7 @@ class GitSync(object):
     def prepare_clone(self):
         new_upstream_files = self.find_upstream_updates('A')
         modified_upstream_files = self.find_upstream_updates('M')
-        #modified_local_files = self.find_mofified_local_files()
         untracked_local_files = self.find_untracked_local_files()
-
-        # upstream files changed, local files have not changed
-        # ACTUALLY, PROBABLY DO NOTHING HERE
-        #files_to_move = [f for f in modified_upstream_files if f in unmodified_local_files]
 
         # move certain files to avoid conflicts with upstream
         # - tracked local files have been modified
@@ -117,7 +112,7 @@ class GitSync(object):
         files_to_move.extend([f for f in untracked_local_files if f in new_upstream_files])
         self.move_files(files_to_move)
 
-        # local files have been removed, but still exist upstream
+        # if local files have been removed, but still exist upstream, restore them
         self.restore_deleted_files()
 
     def update_remotes(self):
