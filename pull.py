@@ -29,7 +29,7 @@ class GitSync(object):
             'git', 'ls-files', '--deleted', '-z'
         ], cwd=self.repo_dir).decode().strip().split('\0')
         for f in deleted_files:
-            if f:
+            if f: # why is this here? there was a reason...
                 os.system('git checkout origin/{} -- {}'.format(self.branch_name, f))
                 logging.info('Restored {}'.format(f))
 
