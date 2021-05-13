@@ -127,7 +127,7 @@ class GitSync(object):
         # move certain files to avoid conflicts with upstream
         # - both local and upstream files of the same name have been modified
         # - tracked local files have been modified, upstream files have not been modified
-        # - untracked local files are created, upstream files of the same names have also been created
+        # - untracked local files have been created, upstream files of the same names have also been created
         files_to_move = [f for f in modified_local_files if f in modified_upstream_files]
         files_to_move = [f for f in modified_local_files if f not in modified_upstream_files]
         files_to_move.extend([f for f in untracked_local_files if f in new_upstream_files])
