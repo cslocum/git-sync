@@ -96,10 +96,6 @@ class GitSync(object):
         logging.info('Merging {} into local clone...'.format(self.branch_name))
         os.system('git -c user.email=archive@stsci.edu -c user.name=git-sync merge -Xours --no-edit origin/{}'.format(self.branch_name))
 
-    def pull(self):
-        logging.info('Pulling latest from {}...'.format(self.branch_name))
-        os.system('git pull origin {}'.format(self.branch_name))
-
     def prepare_clone(self):
         new_upstream_files = self.find_upstream_updates('A')
         modified_upstream_files = self.find_upstream_updates('M')
@@ -132,7 +128,6 @@ class GitSync(object):
             self.update_remotes()
             self.prepare_clone()
             self.merge()
-            self.pull()
         logging.info('Done.')
 
 
