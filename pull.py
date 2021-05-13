@@ -10,13 +10,6 @@ import argparse
 import datetime
 
 
-def execute_cmd(cmd):
-    try:
-        os.system(" ".join(cmd))
-    except Exception as e:
-        raise e
-
-
 class GitSync(object):
 
     def __init__(self, git_url, branch_name, repo_dir):
@@ -32,16 +25,13 @@ class GitSync(object):
         self.sync()
 
     def restore_deleted_files(self):
-        logging.info('Restoring locally deleted files...')
         deleted_files = subprocess.check_output([
             'git', 'ls-files', '--deleted', '-z'
         ], cwd=self.repo_dir).decode().strip().split('\0')
         for f in deleted_files:
-            try:
-                execute_cmd(['git', 'checkout', 'origin/{}'.format(self.branch_name), '--', f])
-                logging.debug('Restored {}'.format(f))
-            except Exception:
-                logging.warning('{} may not longer exist upstream'.format(f))
+            if f:
+                os.system('git checkout origin/{} -- {}'.format(self.branch_name, f))
+                logging.info('Restored {}'.format(f))
 
     def move_files(self, files):
         for f in files:
@@ -104,20 +94,16 @@ class GitSync(object):
 
     def merge(self):
         logging.info('Merging {} into local clone...'.format(self.branch_name))
-        execute_cmd([
-            'git',
-            '-c', 'user.email=archive@stsci.edu',
-            '-c', 'user.name=git-sync',
-            'merge',
-            #'-Xours',
-            '--no-edit',
-            'origin/{}'.format(self.branch_name)
-        ])
+        os.system('git -c user.email=archive@stsci.edu -c user.name=git-sync merge -Xours --no-edit origin/{}'.format(self.branch_name))
+
+    def pull(self):
+        logging.info('Pulling latest from {}...'.format(self.branch_name))
+        os.system('git pull origin {}'.format(self.branch_name))
 
     def prepare_clone(self):
         new_upstream_files = self.find_upstream_updates('A')
         modified_upstream_files = self.find_upstream_updates('M')
-        modified_local_files = self.find_mofified_local_files()
+        #modified_local_files = self.find_mofified_local_files()
         untracked_local_files = self.find_untracked_local_files()
 
         # upstream files changed, local files have not changed
@@ -125,11 +111,9 @@ class GitSync(object):
         #files_to_move = [f for f in modified_upstream_files if f in unmodified_local_files]
 
         # move certain files to avoid conflicts with upstream
-        # - both local and upstream files of the same name have been modified
-        # - tracked local files have been modified, upstream files have not been modified
+        # - tracked local files have been modified
         # - untracked local files have been created, upstream files of the same names have also been created
-        files_to_move = [f for f in modified_local_files if f in modified_upstream_files]
-        files_to_move = [f for f in modified_local_files if f not in modified_upstream_files]
+        files_to_move = self.find_mofified_local_files()
         files_to_move.extend([f for f in untracked_local_files if f in new_upstream_files])
         self.move_files(files_to_move)
 
@@ -138,11 +122,11 @@ class GitSync(object):
 
     def update_remotes(self):
         logging.info('Fetching remotes from {}...'.format(self.git_url))
-        execute_cmd(['git', 'fetch'])
+        os.system('git fetch')
 
     def init_repo(self):
         logging.info('Repo {} doesn\'t exist. Cloning...'.format(self.repo_dir))
-        execute_cmd(['git', 'clone', '--branch', self.branch_name, self.git_url, self.repo_dir])
+        os.system('git clone --branch {} {} {}'.format(self.branch_name, self.git_url, self.repo_dir))
         logging.info('Repo {} initialized'.format(self.repo_dir))
 
     def sync(self):
@@ -153,6 +137,7 @@ class GitSync(object):
             self.update_remotes()
             self.prepare_clone()
             self.merge()
+            self.pull()
         logging.info('Done.')
 
 
