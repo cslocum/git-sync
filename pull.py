@@ -52,7 +52,7 @@ class GitSync(object):
         (output, err) = proc.communicate()
         return [f for f in output.decode("utf-8").split('\n') if len(f) > 0]
 
-    def find_mofified_local_files(self):
+    def find_motified_local_files(self):
         proc = subprocess.Popen(
             ['git ls-tree -r {} --name-only'.format(self.branch_name)],
             stdout=subprocess.PIPE, shell=True
@@ -108,7 +108,7 @@ class GitSync(object):
         # move certain files to avoid conflicts with upstream
         # - tracked local files have been modified
         # - untracked local files have been created, upstream files of the same names have also been created
-        files_to_move = self.find_mofified_local_files()
+        files_to_move = self.find_motified_local_files()
         files_to_move.extend([f for f in untracked_local_files if f in new_upstream_files])
         self.move_files(files_to_move)
 
