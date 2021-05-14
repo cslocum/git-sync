@@ -85,10 +85,8 @@ class GitSync(object):
 
             return files
 
-        if mode == 'A':
-            return check_upstream('A')
-        elif mode == 'M':
-            return check_upstream('M')
+        if mode in ['A', 'M']:
+            return check_upstream(mode)
         else:
             raise Exception('mode must be either A or M')
 
