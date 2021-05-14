@@ -50,7 +50,7 @@ class GitSync(object):
             stdout=subprocess.PIPE, shell=True
         )
         (output, err) = proc.communicate()
-        return [f for f in output.decode("utf-8").split('\n') if len(f) > 0]
+        return [f for f in output.decode('utf-8').split('\n') if len(f) > 0]
 
     def find_modified_local_files(self):
         proc = subprocess.Popen(
@@ -58,7 +58,7 @@ class GitSync(object):
             stdout=subprocess.PIPE, shell=True
         )
         (output, err) = proc.communicate()
-        tracked_files = [f for f in output.decode("utf-8").split('\n') if len(f) > 0]
+        tracked_files = [f for f in output.decode('utf-8').split('\n') if len(f) > 0]
 
         modified = []
         for f in tracked_files:
