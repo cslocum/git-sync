@@ -94,7 +94,12 @@ class GitSync(object):
 
     def merge(self):
         logging.info('Merging {} into local clone...'.format(self.branch_name))
-        os.system('git -c user.email=archive@stsci.edu -c user.name=git-sync merge -Xours --no-edit origin/{}'.format(self.branch_name))
+        user_email = 'archive@stsci.edu'
+        user_name = 'git-sync'
+        # BUG: is the commit part work?
+        os.system('git -c user.email={} -c user.name={} merge -Xours --no-edit origin/{}'.format(
+            user_email, user_name, self.branch_name
+        ))
 
     def prepare_clone(self):
         new_upstream_files = self.find_upstream_updates('A')
