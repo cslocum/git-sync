@@ -94,7 +94,7 @@ class GitSync(object):
         logging.info('Merging {} into local clone...'.format(self.branch_name))
         user_email = 'archive@stsci.edu'
         user_name = 'git-sync'
-        # BUG: is the commit part work?
+        # BUG: is the commit part working?
         os.system('git -c user.email={} -c user.name={} merge -Xours --no-edit origin/{}'.format(
             user_email, user_name, self.branch_name
         ))
